@@ -2,6 +2,8 @@
 pragma solidity ^0.8.18;
 
 contract ProposalContract {
+
+    address owner;
     
 uint256 private counter; // Counter to keep track of proposal IDs
 
@@ -18,8 +20,34 @@ uint256 private counter; // Counter to keep track of proposal IDs
 
 mapping(uint256 => Proposal) proposal_history; // Recordings of previous proposals
 
+address[]  private voted_addresses;
+
+constructor() {
+  owner = msg.sender;
+  voted_addresses.push(msg.sender);
+}
+
+modifier onlyOwner() {
+    require(msg.sender == owner);
+    _;
+}
+
+modifier active() {
+    require(proposal_history[counter].is_active == true, "The proposal is not active");
+    _;
+}
+
+modifier newVoter(address _address) {
+    require(!isVoted(_address), "Address has already voted");
+    _;
+}
+
+ function setOwner(address new_owner) external onlyOwner {
+    owner = new_owner;
+}
+
 // Function to create a new proposal
-    function create(string calldata _title, string calldata _description, uint256 _total_vote_to_end) external {
+    function create(string calldata _title, string calldata _description, uint256 _total_vote_to_end) external onlyOwner {
         counter += 1; // Increment the proposal ID counter
         proposal_history[counter] = Proposal(
             _title, // Set the title
@@ -32,5 +60,51 @@ mapping(uint256 => Proposal) proposal_history; // Recordings of previous proposa
             true // Mark the proposal as active
         );
     }
+
+function vote(uint8 choice) external active newVoter(msg.sender) {
+    
+Proposal storage proposal = proposal_history[counter];
+uint256 total_vote = proposal.approve + proposal.reject + proposal.pass;
+
+voted_addresses.push(msg.sender);
+
+if (choice == 1) {
+    proposal.approve += 1;
+    proposal.current_state = calculateCurrentState();
+} else if (choice == 2) {
+    proposal.reject += 1;
+    proposal.current_state = calculateCurrentState();
+} else if (choice == 0) {
+    proposal.pass += 1;
+    proposal.current_state = calculateCurrentState();
+}
+
+if ((proposal.total_vote_to_end - total_vote == 1) && (choice == 1 || choice == 2 || choice == 0)) {
+    proposal.is_active = false;
+
+voted_addresses = [owner];
+
+}
+}
+
+function calculateCurrentState() private view returns(bool) {
+    Proposal storage proposal = proposal_history[counter];
+
+    uint256 approve = proposal.approve;
+    uint256 reject = proposal.reject;
+    uint256 pass = proposal.pass;
+        
+    if (proposal.pass %2 == 1) {
+        pass += 1;
+    }
+
+    pass = pass / 2;
+
+    if (approve > reject + pass) {
+        return true;
+    } else {
+        return false;
+    }
+}
 
 }
